@@ -39,6 +39,7 @@ export interface PitchState {
 }
 
 const MIN_FREQ = 200; // below hole 1 blow (C4 ≈ 261 Hz) with margin
+const RAW_MIN_FREQ = 100; // lowest detector output we treat as a real (sub-octave) pitch
 const MAX_FREQ = 2200; // above hole 10 blow (C7 ≈ 2093 Hz)
 /** octave candidates whose own peak is within this many dB of the strongest one are eligible; lowest wins */
 const OCTAVE_FIX_DB = 6;
@@ -126,7 +127,8 @@ export function usePitch() {
       // Recent per-frame results (null = silence/unclear) for the majority vote.
       const recent: (Detected | null)[] = [];
       // Slowly tracked noise floor (RMS) - falls quickly, rises very slowly.
-      let noiseFloor = 0.001;
+      // Start high (-30 dB) so it drops onto the real floor within a few frames.
+      let noiseFloor = dbToRms(-30);
       let lastStable: Detected | null = null;
       let lastT = performance.now();
       let fps = 60;
@@ -156,7 +158,7 @@ export function usePitch() {
         // the signal is near it (< +10 dB), so a long loud note can't drag the
         // gate up under itself (that cut off notes after ~2 s in testing).
         if (volume < noiseFloor) noiseFloor = volume;
-        else if (volume < noiseFloor * 3.16) noiseFloor = noiseFloor * 0.99 + volume * 0.01;
+        else if (volume < noiseFloor * 5.6) noiseFloor = noiseFloor * 0.99 + volume * 0.01; // < +15 dB
         const gate = Math.max(dbToRms(s.minVolumeDb), noiseFloor * s.noiseRatio);
 
         const [rawPitch, clarity] = detector.findPitch(buffer, ctx.sampleRate);
@@ -170,7 +172,9 @@ export function usePitch() {
         // instrument's range we take the LOWEST one whose own spectral peak is
         // within OCTAVE_FIX_DB of the strongest candidate.
         let pitch = rawPitch;
-        if (Number.isFinite(rawPitch) && rawPitch > 0) {
+        // Below RAW_MIN_FREQ the detector is just reporting its lag limit
+        // (sampleRate / fftSize ≈ 23 Hz) on noise - never octave-correct that.
+        if (Number.isFinite(rawPitch) && rawPitch >= RAW_MIN_FREQ) {
           analyser.getFloatFrequencyData(spectrum);
           const binHz = ctx.sampleRate / analyser.fftSize;
           const magAt = (f: number) => {
