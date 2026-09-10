@@ -88,7 +88,24 @@ export function usePitch() {
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = getSettings().fftSize;
-      source.connect(analyser);
+
+      // Band-pass the mic before measuring. Phone/laptop mics carry a lot of
+      // rumble (handling noise, hum, wind) at 20-150 Hz, well below hole 1
+      // blow (C4 = 261 Hz). That rumble used to dominate the RMS and set the
+      // noise floor; two cascaded high-pass stages (~24 dB/oct) remove it.
+      // The low-pass just trims hiss; harmonics needed for pitch stay intact.
+      const hp1 = ctx.createBiquadFilter();
+      hp1.type = 'highpass';
+      hp1.frequency.value = 180;
+      hp1.Q.value = 0.7;
+      const hp2 = ctx.createBiquadFilter();
+      hp2.type = 'highpass';
+      hp2.frequency.value = 180;
+      hp2.Q.value = 0.7;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 5000;
+      source.connect(hp1).connect(hp2).connect(lp).connect(analyser);
 
       let detector = PitchDetector.forFloat32Array(analyser.fftSize);
       detector.minVolumeDecibels = -70; // we gate volume ourselves

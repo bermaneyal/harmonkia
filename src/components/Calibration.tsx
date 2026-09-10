@@ -224,7 +224,7 @@ export function Calibration({ pitch, onClose }: Props) {
       if (vols.length === 0) return;
       // 90th percentile of the silence, plus a margin
       const noise = vols[Math.floor(vols.length * 0.9)];
-      const db = Math.max(-90, Math.min(-20, Math.round(noise + 10)));
+      const db = Math.max(-90, Math.min(-20, Math.round(noise + 8)));
       updateSettings({ minVolumeDb: db, noiseRatio: 2 });
       pushLog('target', `הסף כויל: רעש ${noise.toFixed(0)} dB → סף ${db} dB`);
     }, 200);
