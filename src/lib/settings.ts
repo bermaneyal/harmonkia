@@ -60,6 +60,11 @@ export function getSettings(): DetectionSettings {
 
 export function updateSettings(patch: Partial<DetectionSettings>) {
   current = { ...current, ...patch };
+  // votes needed can never exceed the window, or nothing is ever detected
+  if (current.voteMin > current.voteWindow) {
+    if ('voteWindow' in patch) current.voteMin = current.voteWindow;
+    else current.voteWindow = current.voteMin;
+  }
   try {
     localStorage.setItem(KEY, JSON.stringify(current));
   } catch {

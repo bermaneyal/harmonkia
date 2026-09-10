@@ -40,8 +40,8 @@ export interface PitchState {
 
 const MIN_FREQ = 200; // below hole 1 blow (C4 ≈ 261 Hz) with margin
 const MAX_FREQ = 2200; // above hole 10 blow (C7 ≈ 2093 Hz)
-/** how much louder (dB) the 2x bin must be than the reported pitch to call it a sub-octave error */
-const OCTAVE_FIX_DB = 8;
+/** octave candidates whose own peak is within this many dB of the strongest one are eligible; lowest wins */
+const OCTAVE_FIX_DB = 6;
 
 /**
  * Listens to the microphone and continuously reports the detected pitch
@@ -92,6 +92,9 @@ export function usePitch() {
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = getSettings().fftSize;
+      // We read the spectrum every frame to decide the octave; the default
+      // smoothing (0.8) lags ~10 frames behind and made that decision flaky.
+      analyser.smoothingTimeConstant = 0;
 
       // Band-pass the mic before measuring. Phone/laptop mics carry a lot of
       // rumble (handling noise, hum, wind) at 20-150 Hz, well below hole 1
@@ -149,18 +152,25 @@ export function usePitch() {
         for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
         const volume = Math.sqrt(sum / buffer.length);
 
-        noiseFloor = volume < noiseFloor ? volume : noiseFloor * 0.995 + volume * 0.005;
+        // Noise floor: follows quiet frames immediately, drifts up only while
+        // the signal is near it (< +10 dB), so a long loud note can't drag the
+        // gate up under itself (that cut off notes after ~2 s in testing).
+        if (volume < noiseFloor) noiseFloor = volume;
+        else if (volume < noiseFloor * 3.16) noiseFloor = noiseFloor * 0.99 + volume * 0.01;
         const gate = Math.max(dbToRms(s.minVolumeDb), noiseFloor * s.noiseRatio);
 
         const [rawPitch, clarity] = detector.findPitch(buffer, ctx.sampleRate);
 
-        // Sub-octave correction. The McLeod method sometimes locks onto 2 or 4
-        // periods of a high note (hole 7 blow C6 read as C4 = hole 1). A real
-        // harmonica note always has a strong fundamental, so if the spectrum
-        // has clearly more energy at 2x the reported pitch than at the pitch
-        // itself, the true note is an octave up. Checked twice (up to 4x).
+        // Octave correction. The McLeod method returns half (or a quarter of)
+        // the frequency whenever the signal carries a subharmonic only ~8 dB
+        // below the fundamental - which phone mics do to C notes on this
+        // harmonica (hole 1 blow came back as 131 Hz, hole 4 blow as 131 too).
+        // A real harmonica note has its fundamental as the strongest partial,
+        // so among the octave candidates f/2, f, 2f, 4f, 8f inside the
+        // instrument's range we take the LOWEST one whose own spectral peak is
+        // within OCTAVE_FIX_DB of the strongest candidate.
         let pitch = rawPitch;
-        if (Number.isFinite(pitch) && pitch > 0) {
+        if (Number.isFinite(rawPitch) && rawPitch > 0) {
           analyser.getFloatFrequencyData(spectrum);
           const binHz = ctx.sampleRate / analyser.fftSize;
           const magAt = (f: number) => {
@@ -169,12 +179,17 @@ export function usePitch() {
             for (let k = Math.max(0, b - 1); k <= Math.min(spectrum.length - 1, b + 1); k++) m = Math.max(m, spectrum[k]);
             return m;
           };
-          for (let i = 0; i < 2; i++) {
-            const up = pitch * 2;
-            if (up >= MAX_FREQ) break;
-            if (magAt(up) > magAt(pitch) + OCTAVE_FIX_DB) pitch = up;
-            else break;
+          let best = -Infinity;
+          const cands: { f: number; m: number }[] = [];
+          for (let k = -1; k <= 3; k++) {
+            const f = rawPitch * Math.pow(2, k);
+            if (f < MIN_FREQ || f >= MAX_FREQ) continue;
+            const m = magAt(f);
+            cands.push({ f, m });
+            if (m > best) best = m;
           }
+          const pick = cands.find((c) => c.m >= best - OCTAVE_FIX_DB);
+          if (pick) pitch = pick.f;
         }
         const inRange = pitch > MIN_FREQ && pitch < MAX_FREQ;
         const raw = inRange && Number.isFinite(pitch) ? freqToHole(pitch) : null;
@@ -213,9 +228,10 @@ export function usePitch() {
           }
         }
 
+        const voteMin = Math.min(s.voteMin, s.voteWindow);
         let stable: Detected | null;
-        if (winner && winnerCount >= s.voteMin) stable = winner;
-        else if (silent >= s.voteMin) stable = null;
+        if (winner && winnerCount >= voteMin) stable = winner;
+        else if (silent >= voteMin) stable = null;
         else stable = lastStable; // undecided (note transition): keep previous
         lastStable = stable;
 

@@ -485,7 +485,6 @@ export function Calibration({ pitch, onClose }: Props) {
             כפגיעה
           </label>
         </div>
-        {settings.voteMin > settings.voteWindow && <p className="error">״קולות נדרשים״ גדול מחלון ההצבעה – שום תו לא יזוהה.</p>}
       </section>
 
       <section className="cal-panel">
