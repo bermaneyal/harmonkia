@@ -1,5 +1,7 @@
 import type { Detected } from '../lib/harmonica';
 import { midiToName } from '../lib/harmonica';
+import { matchesTarget } from '../lib/matcher';
+import { useSettings } from '../lib/settings';
 import type { TabNote } from '../lib/tabs';
 
 interface Props {
@@ -11,7 +13,8 @@ interface Props {
 
 /** Shows what the microphone hears vs. what the song expects. */
 export function Tuner({ detected, target, volume, listening }: Props) {
-  const match = detected && target && detected.nearest.midi === target.midi;
+  const { octaveTolerant } = useSettings();
+  const match = detected && target && matchesTarget(detected.nearest.midi, target.midi, octaveTolerant);
   const cls = ['tuner', !listening ? 'off' : match ? 'match' : detected ? 'wrong' : 'silent'].join(' ');
 
   return (

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { songs } from './data/songs';
 import { parseSong } from './lib/tabs';
 import { usePitch } from './lib/usePitch';
+import { createMatcher, resetMatcher, stepMatcher } from './lib/matcher';
+import { useSettings } from './lib/settings';
 import { click, playNote } from './lib/tone';
 import {
   clearHistory,
@@ -30,9 +32,8 @@ import { TabView, type NoteStatus } from './components/TabView';
 import { Tuner } from './components/Tuner';
 import { Summary } from './components/Summary';
 import { AccountBar, type SyncStatus } from './components/AccountBar';
+import { Calibration } from './components/Calibration';
 
-/** frames the same pitch must be held before counting as played */
-const HOLD_FRAMES = 6;
 /** pause before the next loop starts */
 const LOOP_PAUSE_MS = 1500;
 
@@ -58,6 +59,8 @@ export default function App() {
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null);
 
   const pitch = usePitch();
+  const settings = useSettings();
+  const [view, setView] = useState<'practice' | 'calibration'>('practice');
 
   // ---- account & cloud sync ----
   const auth = useAuth();
@@ -174,9 +177,7 @@ export default function App() {
   const bpm = Math.round((song.bpm * speed) / 100);
 
   // refs for detection logic (avoid stale closures in the rAF-driven effect)
-  const holdRef = useRef(0);
-  const armedRef = useRef(true);
-  const lastMidiRef = useRef<number | null>(null);
+  const matcherRef = useRef(createMatcher());
   const hitThisNoteRef = useRef(false);
   const mistakesRef = useRef<Mistake[]>([]);
   const startedAtRef = useRef(0);
@@ -188,9 +189,7 @@ export default function App() {
       window.clearTimeout(loopTimerRef.current);
       setCurrent(from);
       setStatus(new Array(song.notes.length).fill('idle'));
-      holdRef.current = 0;
-      armedRef.current = true;
-      lastMidiRef.current = null;
+      resetMatcher(matcherRef.current);
       hitThisNoteRef.current = false;
       mistakesRef.current = [];
       startedAtRef.current = performance.now();
@@ -220,26 +219,10 @@ export default function App() {
   useEffect(() => {
     if (!running || finished || !target) return;
     const d = pitch.detected;
+    const ev = stepMatcher(matcherRef.current, d, target.midi, settings);
+    if (ev === 'none' || !d) return;
 
-    if (!d) {
-      // silence re-arms, so the same hole can be played twice in a row
-      holdRef.current = 0;
-      armedRef.current = true;
-      lastMidiRef.current = null;
-      return;
-    }
-    if (d.nearest.midi !== lastMidiRef.current) {
-      holdRef.current = 0;
-      armedRef.current = true;
-      lastMidiRef.current = d.nearest.midi;
-    }
-    if (!armedRef.current) return;
-
-    holdRef.current += 1;
-    if (holdRef.current < HOLD_FRAMES) return;
-    armedRef.current = false;
-
-    if (d.nearest.midi === target.midi) {
+    if (ev === 'hit') {
       if (hitThisNoteRef.current) return;
       hitThisNoteRef.current = true;
       setStatus((s) => s.map((v, i) => (i === current ? 'hit' : v)));
@@ -259,7 +242,7 @@ export default function App() {
       });
       setStatus((s) => s.map((v, i) => (i === current && v === 'idle' ? 'miss' : v)));
     }
-  }, [pitch.detected, running, finished, target, current, mode]);
+  }, [pitch.detected, running, finished, target, current, mode, settings]);
 
   // ---- tempo mode: metronome drives the cursor ----
   useEffect(() => {
@@ -274,8 +257,7 @@ export default function App() {
         if (!already) mistakesRef.current.push({ index: current, hole: target.hole, breath: target.breath });
       }
       hitThisNoteRef.current = false;
-      holdRef.current = 0;
-      armedRef.current = true;
+      resetMatcher(matcherRef.current);
       setCurrent((c) => c + 1);
     }, 60000 / bpm);
     return () => window.clearTimeout(id);
@@ -349,6 +331,14 @@ export default function App() {
   };
 
   const sectionHits = status.slice(section.first, section.last + 1).filter((s) => s === 'hit').length;
+
+  if (view === 'calibration') {
+    return (
+      <div className="app">
+        <Calibration pitch={pitch} onClose={() => setView('practice')} />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -461,6 +451,15 @@ export default function App() {
           </button>
           <button onClick={() => (pitch.listening ? pitch.stop() : pitch.start())}>
             {pitch.listening ? 'כבה מיקרופון' : 'הפעל מיקרופון'}
+          </button>
+          <button
+            onClick={() => {
+              setRunning(false);
+              setView('calibration');
+            }}
+            title="בדיקה וכיול של זיהוי הצליל"
+          >
+            כיול
           </button>
         </div>
         {pitch.error && <p className="error">שגיאת מיקרופון: {pitch.error}</p>}
