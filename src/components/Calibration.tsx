@@ -244,6 +244,7 @@ export function Calibration({ pitch, onClose }: Props) {
     const frames = pitch.history.current.slice(-300).map((f: RawFrame) => [
       Math.round(f.t),
       +f.freq.toFixed(1),
+      f.rawFreq !== f.freq ? +f.rawFreq.toFixed(1) : 0,
       +f.clarity.toFixed(3),
       +rmsToDb(f.volume).toFixed(1),
       +rmsToDb(f.gate).toFixed(1),
@@ -259,7 +260,7 @@ export function Calibration({ pitch, onClose }: Props) {
       matcher,
       stats,
       log: log.map((l) => l.text),
-      frames: '[t, Hz, clarity, dB, gateDb, reject, hole]',
+      frames: '[t, Hz, rawHzIfCorrected, clarity, dB, gateDb, reject, hole]',
       data: frames,
     };
     const text = JSON.stringify(report);

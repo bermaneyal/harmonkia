@@ -10,6 +10,8 @@ export type RejectReason = 'volume' | 'clarity' | 'range' | null;
 export interface RawFrame {
   t: number;
   freq: number;
+  /** detector output before sub-octave correction */
+  rawFreq: number;
   clarity: number;
   /** RMS 0..1 */
   volume: number;
@@ -38,6 +40,8 @@ export interface PitchState {
 
 const MIN_FREQ = 200; // below hole 1 blow (C4 ≈ 261 Hz) with margin
 const MAX_FREQ = 2200; // above hole 10 blow (C7 ≈ 2093 Hz)
+/** how much louder (dB) the 2x bin must be than the reported pitch to call it a sub-octave error */
+const OCTAVE_FIX_DB = 8;
 
 /**
  * Listens to the microphone and continuously reports the detected pitch
@@ -110,6 +114,7 @@ export function usePitch() {
       let detector = PitchDetector.forFloat32Array(analyser.fftSize);
       detector.minVolumeDecibels = -70; // we gate volume ourselves
       let buffer = new Float32Array(detector.inputLength);
+      let spectrum = new Float32Array(analyser.frequencyBinCount);
 
       ctxRef.current = ctx;
       streamRef.current = stream;
@@ -130,6 +135,7 @@ export function usePitch() {
           detector = PitchDetector.forFloat32Array(s.fftSize);
           detector.minVolumeDecibels = -70;
           buffer = new Float32Array(detector.inputLength);
+          spectrum = new Float32Array(analyser.frequencyBinCount);
           recent.length = 0;
         }
 
@@ -146,12 +152,35 @@ export function usePitch() {
         noiseFloor = volume < noiseFloor ? volume : noiseFloor * 0.995 + volume * 0.005;
         const gate = Math.max(dbToRms(s.minVolumeDb), noiseFloor * s.noiseRatio);
 
-        const [pitch, clarity] = detector.findPitch(buffer, ctx.sampleRate);
+        const [rawPitch, clarity] = detector.findPitch(buffer, ctx.sampleRate);
+
+        // Sub-octave correction. The McLeod method sometimes locks onto 2 or 4
+        // periods of a high note (hole 7 blow C6 read as C4 = hole 1). A real
+        // harmonica note always has a strong fundamental, so if the spectrum
+        // has clearly more energy at 2x the reported pitch than at the pitch
+        // itself, the true note is an octave up. Checked twice (up to 4x).
+        let pitch = rawPitch;
+        if (Number.isFinite(pitch) && pitch > 0) {
+          analyser.getFloatFrequencyData(spectrum);
+          const binHz = ctx.sampleRate / analyser.fftSize;
+          const magAt = (f: number) => {
+            const b = Math.round(f / binHz);
+            let m = -Infinity;
+            for (let k = Math.max(0, b - 1); k <= Math.min(spectrum.length - 1, b + 1); k++) m = Math.max(m, spectrum[k]);
+            return m;
+          };
+          for (let i = 0; i < 2; i++) {
+            const up = pitch * 2;
+            if (up >= MAX_FREQ) break;
+            if (magAt(up) > magAt(pitch) + OCTAVE_FIX_DB) pitch = up;
+            else break;
+          }
+        }
         const inRange = pitch > MIN_FREQ && pitch < MAX_FREQ;
         const raw = inRange && Number.isFinite(pitch) ? freqToHole(pitch) : null;
         const reject: RejectReason =
           volume <= gate ? 'volume' : clarity <= s.minClarity ? 'clarity' : !inRange ? 'range' : null;
-        const frame: RawFrame = { t: now, freq: pitch, clarity, volume, noiseFloor, gate, reject, raw };
+        const frame: RawFrame = { t: now, freq: pitch, rawFreq: rawPitch, clarity, volume, noiseFloor, gate, reject, raw };
         const accepted = reject === null ? raw : null;
 
         const hist = historyRef.current;
