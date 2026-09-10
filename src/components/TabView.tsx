@@ -65,7 +65,7 @@ export function TabView({ song, current, status, range, onNoteClick, onLineClick
                     <span className="arrow">{n.breath === 'blow' ? '↑' : '↓'}</span>
                     <span className="hole">{n.hole}</span>
                     <span className="syl" dir="rtl">
-                      {n.syllable}
+                      {n.syllable === '~' ? '·' : n.syllable}
                     </span>
                   </button>
                 );

@@ -22,18 +22,32 @@ export interface Song {
   notes: TabNote[];
 }
 
-/** Parses a token like "5" or "5-" */
+/**
+ * Parses a token like "5" (blow), "5-" (draw, mad-in-israel style) or
+ * "-5" (draw, harmonica.com style).
+ */
 export function parseToken(token: string): { hole: number; breath: Breath } | null {
-  const m = /^(\d+)(-?)$/.exec(token.trim());
+  const m = /^(-?)(\d+)(-?)$/.exec(token.trim());
   if (!m) return null;
-  return { hole: Number(m[1]), breath: m[2] === '-' ? 'draw' : 'blow' };
+  return { hole: Number(m[2]), breath: m[1] === '-' || m[3] === '-' ? 'draw' : 'blow' };
+}
+
+/**
+ * Splits a tab line into tokens. Handles notes glued together with a draw
+ * sign in between ("4-4" → "4 -4", as harmonica.com sometimes writes them).
+ */
+export function tokenizeTab(tab: string): string[] {
+  return tab
+    .replace(/(\d)-(\d)/g, '$1 -$2')
+    .split(/\s+/)
+    .filter(Boolean);
 }
 
 export function parseSong(src: SongSource): Song {
   const lines: TabNote[][] = [];
   const notes: TabNote[] = [];
   src.lines.forEach((line, lineIdx) => {
-    const tokens = line.tab.split(/\s+/).filter(Boolean);
+    const tokens = tokenizeTab(line.tab);
     const syllables = line.lyrics.split(/\s+/).filter(Boolean);
     const parsed: TabNote[] = [];
     tokens.forEach((tok, i) => {
