@@ -29,6 +29,8 @@ export interface Attempt {
   clean: boolean;
   /** seconds */
   duration: number;
+  /** true once the attempt has been stored in the cloud (absent = local only) */
+  synced?: boolean;
 }
 
 export function accuracy(a: Attempt): number {
@@ -80,8 +82,20 @@ export function weakSpots(mistakes: Mistake[], limit = 5): WeakSpot[] {
 
 // ---- persistence -------------------------------------------------------
 
-const KEY = (songId: string) => `harmonkia:history:${songId}`;
-const MAX_HISTORY = 100;
+// localStorage is the local cache and the outbox for cloud sync (see sync.ts).
+// One key per song, attempts sorted by time.
+
+const PREFIX = 'harmonkia:history:';
+const KEY = (songId: string) => `${PREFIX}${songId}`;
+const MAX_HISTORY = 500;
+
+function write(songId: string, history: Attempt[]) {
+  try {
+    localStorage.setItem(KEY(songId), JSON.stringify(history.slice(-MAX_HISTORY)));
+  } catch {
+    /* storage unavailable (private mode etc.) – keep in memory only */
+  }
+}
 
 export function loadHistory(songId: string): Attempt[] {
   try {
@@ -93,12 +107,8 @@ export function loadHistory(songId: string): Attempt[] {
 }
 
 export function saveAttempt(a: Attempt): Attempt[] {
-  const history = [...loadHistory(a.songId), a].slice(-MAX_HISTORY);
-  try {
-    localStorage.setItem(KEY(a.songId), JSON.stringify(history));
-  } catch {
-    /* storage unavailable (private mode etc.) – keep in memory only */
-  }
+  const history = [...loadHistory(a.songId), { ...a, synced: false }];
+  write(a.songId, history);
   return history;
 }
 
@@ -108,6 +118,66 @@ export function clearHistory(songId: string) {
   } catch {
     /* ignore */
   }
+}
+
+/** All song ids that have local history. */
+export function localSongIds(): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(PREFIX)) ids.push(k.slice(PREFIX.length));
+    }
+  } catch {
+    /* ignore */
+  }
+  return ids;
+}
+
+/** Every attempt stored locally, across songs. */
+export function loadAllHistory(): Attempt[] {
+  return localSongIds().flatMap(loadHistory);
+}
+
+export function clearAllHistory() {
+  localSongIds().forEach(clearHistory);
+}
+
+/** Marks the given attempt ids as synced. */
+export function markSynced(ids: Iterable<string>) {
+  const set = new Set(ids);
+  if (set.size === 0) return;
+  for (const songId of localSongIds()) {
+    const history = loadHistory(songId);
+    if (!history.some((a) => set.has(a.id) && !a.synced)) continue;
+    write(
+      songId,
+      history.map((a) => (set.has(a.id) ? { ...a, synced: true } : a)),
+    );
+  }
+}
+
+/**
+ * Merges attempts coming from the cloud into local storage (union by id).
+ * Returns the song ids that changed.
+ */
+export function mergeRemote(remote: Attempt[], synced = true): string[] {
+  const bySong = new Map<string, Attempt[]>();
+  for (const a of remote) {
+    const list = bySong.get(a.songId) ?? [];
+    list.push({ ...a, synced });
+    bySong.set(a.songId, list);
+  }
+  const changed: string[] = [];
+  for (const [songId, incoming] of bySong) {
+    const local = loadHistory(songId);
+    const known = new Set(local.map((a) => a.id));
+    const fresh = incoming.filter((a) => !known.has(a.id));
+    if (fresh.length === 0) continue;
+    write(songId, [...local, ...fresh].sort((x, y) => x.at - y.at));
+    changed.push(songId);
+  }
+  return changed;
 }
 
 // ---- graduated practice ------------------------------------------------

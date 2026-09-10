@@ -19,6 +19,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  overflow-x: hidden;
 }
 
 .app {
@@ -366,4 +367,133 @@ button.link {
 }
 .bar.clean {
   background: var(--hit);
+}
+
+/* Account / sync */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+button.google {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #1f1f1f;
+  border-color: #dadce0;
+  font-weight: 500;
+}
+.whoami {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+.whoami img,
+.avatar-fallback {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blow);
+  font-weight: 700;
+}
+.whoami .name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hit);
+}
+.dot.pending {
+  background: var(--draw);
+}
+.dot.syncing {
+  background: var(--blow);
+  animation: pulse 1s infinite;
+}
+.dot.error {
+  background: var(--miss);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+button.icon {
+  padding: 6px 10px;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.menu-wrap {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  top: 110%;
+  inset-inline-end: 0;
+  min-width: 220px;
+  background: var(--panel);
+  border: 1px solid #2c3850;
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.menu button {
+  text-align: start;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.menu button:hover {
+  background: #253050;
+}
+.menu button.danger {
+  color: var(--miss);
+}
+.menu hr {
+  border: none;
+  border-top: 1px solid #2c3850;
+  margin: 4px 0;
+}
+.menu-status {
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.toast {
+  position: fixed;
+  bottom: 20px;
+  inset-inline-start: 50%;
+  transform: translateX(50%);
+  background: var(--panel);
+  border: 1px solid #2c3850;
+  padding: 10px 16px;
+  border-radius: 10px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }

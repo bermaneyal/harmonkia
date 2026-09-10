@@ -16,9 +16,20 @@ import {
   type Mistake,
   type Mode,
 } from './lib/practice';
+import { useAuth } from './lib/useAuth';
+import {
+  deleteAllCloudData,
+  deleteSongCloudData,
+  exportHistoryJson,
+  importHistoryJson,
+  pendingCount,
+  syncAll,
+} from './lib/sync';
+import { clearAllHistory } from './lib/practice';
 import { TabView, type NoteStatus } from './components/TabView';
 import { Tuner } from './components/Tuner';
 import { Summary } from './components/Summary';
+import { AccountBar, type SyncStatus } from './components/AccountBar';
 
 /** frames the same pitch must be held before counting as played */
 const HOLD_FRAMES = 6;
@@ -47,6 +58,108 @@ export default function App() {
   const [levelUpMsg, setLevelUpMsg] = useState<string | null>(null);
 
   const pitch = usePitch();
+
+  // ---- account & cloud sync ----
+  const auth = useAuth();
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('off');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [pending, setPending] = useState(() => pendingCount());
+  const [toast, setToast] = useState<string | null>(null);
+  const songIdRef = useRef(songId);
+  songIdRef.current = songId;
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  const runSync = useCallback(async () => {
+    if (!auth.user) return;
+    setSyncStatus('syncing');
+    try {
+      const r = await syncAll(auth.user.id);
+      setSyncStatus('idle');
+      setSyncError(null);
+      if (r.changedSongs.includes(songIdRef.current)) setHistory(loadHistory(songIdRef.current));
+      if (r.pulled > 0) showToast(`נמשכו ${r.pulled} ניסיונות ממכשירים אחרים`);
+    } catch (e) {
+      setSyncStatus('error');
+      setSyncError(e instanceof Error ? e.message : 'שגיאה');
+    } finally {
+      setPending(pendingCount());
+    }
+  }, [auth.user, showToast]);
+
+  // sign-in / app load → full sync; sign-out → wipe local copy (shared devices)
+  const prevUserRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!auth.ready) return;
+    const uid = auth.user?.id ?? null;
+    if (prevUserRef.current !== undefined && prevUserRef.current !== null && uid === null) {
+      clearAllHistory();
+      setHistory([]);
+      setSummary(null);
+      setPending(0);
+      setSyncStatus('off');
+    }
+    prevUserRef.current = uid;
+    if (uid) void runSync();
+  }, [auth.ready, auth.user, runSync]);
+
+  // retry when the connection comes back
+  useEffect(() => {
+    const onOnline = () => void runSync();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [runSync]);
+
+  const exportHistory = () => {
+    const blob = new Blob([exportHistoryJson()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `harmonkia-history-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importHistory = async (file: File) => {
+    try {
+      const n = importHistoryJson(await file.text());
+      setHistory(loadHistory(songId));
+      setPending(pendingCount());
+      showToast(n > 0 ? `יובאו ${n} ניסיונות חדשים` : 'לא נמצאו ניסיונות חדשים בקובץ');
+      void runSync();
+    } catch (e) {
+      showToast(`הייבוא נכשל: ${e instanceof Error ? e.message : 'קובץ לא תקין'}`);
+    }
+  };
+
+  const deleteAll = async () => {
+    if (!auth.user) return;
+    if (!window.confirm('למחוק את כל היסטוריית התרגולים שלך מהענן ומהמכשיר הזה? אי אפשר לבטל.')) return;
+    try {
+      await deleteAllCloudData(auth.user.id);
+      setHistory([]);
+      setSummary(null);
+      setPending(0);
+      showToast('כל הנתונים נמחקו');
+    } catch (e) {
+      showToast(`המחיקה נכשלה: ${e instanceof Error ? e.message : 'שגיאה'}`);
+    }
+  };
+
+  const clearSongHistory = async () => {
+    clearHistory(song.id);
+    setHistory([]);
+    setPending(pendingCount());
+    if (auth.user) {
+      try {
+        await deleteSongCloudData(auth.user.id, song.id);
+      } catch (e) {
+        showToast(`נמחק מקומית, אבל לא מהענן: ${e instanceof Error ? e.message : 'שגיאה'}`);
+      }
+    }
+  };
 
   // section boundaries (note indices, inclusive)
   const section = useMemo(() => {
@@ -190,6 +303,8 @@ export default function App() {
     };
     setHistory(saveAttempt(attempt));
     setSummary(attempt);
+    setPending(pendingCount());
+    if (auth.user) void runSync();
 
     let nextStreak = attempt.clean ? streak + 1 : 0;
     let nextSpeed = speed;
@@ -207,7 +322,7 @@ export default function App() {
     } else {
       setRunning(false);
     }
-  }, [running, finished, status, section, song.id, mode, speed, range, streak, autoLevel, loop, resetPass]);
+  }, [running, finished, status, section, song.id, mode, speed, range, streak, autoLevel, loop, resetPass, auth.user, runSync]);
 
   // ---- handlers ----
   const toggleRun = async () => {
@@ -238,9 +353,25 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <h1>הרמוניקה</h1>
-        <p className="sub">לימוד ותרגול מפוחית דיאטונית ב-C</p>
+        <div>
+          <h1>הרמוניקה</h1>
+          <p className="sub">לימוד ותרגול מפוחית דיאטונית ב-C</p>
+        </div>
+        <AccountBar
+          ready={auth.ready}
+          user={auth.user}
+          status={auth.user ? syncStatus : 'off'}
+          pending={pending}
+          error={auth.error ?? syncError}
+          onSignIn={() => void auth.signIn()}
+          onSignOut={() => void auth.signOut()}
+          onSyncNow={() => void runSync()}
+          onExport={exportHistory}
+          onImport={(f) => void importHistory(f)}
+          onDeleteAll={() => void deleteAll()}
+        />
       </header>
+      {toast && <div className="toast">{toast}</div>}
 
       <section className="controls">
         <label>
@@ -353,10 +484,7 @@ export default function App() {
         attempt={summary}
         history={history}
         onClose={() => setSummary(null)}
-        onClearHistory={() => {
-          clearHistory(song.id);
-          setHistory([]);
-        }}
+        onClearHistory={() => void clearSongHistory()}
       />
 
       <TabView
