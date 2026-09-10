@@ -223,3 +223,147 @@ footer a {
     font-size: 2.2rem;
   }
 }
+
+/* Section picker & practice controls */
+.range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.range select {
+  min-width: 140px;
+}
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+.check {
+  flex-direction: row !important;
+  align-items: center;
+  color: var(--text) !important;
+}
+.statusbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  margin: 12px 4px 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.streak {
+  letter-spacing: 3px;
+  color: var(--hit);
+}
+.levelup {
+  color: var(--hit);
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+button.link {
+  background: none;
+  border: none;
+  color: var(--blow);
+  padding: 2px 6px;
+  font-size: 0.85rem;
+}
+
+/* Tab rows with line numbers */
+.tab-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  transition: opacity 0.2s;
+}
+.tab-row.outside {
+  opacity: 0.35;
+}
+.line-no {
+  min-width: 28px;
+  padding: 6px 0;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: none;
+  border: 1px solid #2c3850;
+}
+.tab-row:not(.outside) .line-no {
+  color: var(--text);
+  border-color: var(--blow);
+}
+
+/* Summary */
+.summary {
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.summary h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.summary .label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.stat {
+  min-width: 90px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0f1420;
+}
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  direction: ltr;
+  text-align: right;
+}
+.stat-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.weak {
+  margin-top: 12px;
+}
+.weak ul {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+  line-height: 1.6;
+}
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 48px;
+  margin-top: 8px;
+}
+.bar {
+  width: 14px;
+  background: var(--blow);
+  border-radius: 3px 3px 0 0;
+  opacity: 0.8;
+}
+.bar.clean {
+  background: var(--hit);
+}
