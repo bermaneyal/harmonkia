@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { Song, TabNote } from '../lib/tabs';
 
 export type NoteStatus = 'idle' | 'hit' | 'miss';
@@ -22,8 +23,17 @@ interface Props {
  * shift+click extends the section to include it.
  */
 export function TabView({ song, current, status, range, onNoteClick, onLineClick }: Props) {
+  const rootRef = useRef<HTMLElement>(null);
+
+  // Keep the current note visible: lines scroll sideways on phones, and the
+  // page scrolls vertically as the song advances.
+  useEffect(() => {
+    const el = rootRef.current?.querySelector<HTMLElement>('.note.current');
+    el?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [current]);
+
   return (
-    <section className="tabs">
+    <section className="tabs" ref={rootRef}>
       {song.lines.map((line, li) => {
         const inside = li >= range[0] && li <= range[1];
         return (

@@ -497,7 +497,7 @@ export default function App() {
       />
 
       <footer>
-        <span className="muted">לחיצה על מספר שורה בוחרת אותה לתרגול; Shift+לחיצה מרחיבה את הקטע.</span>
+        <span className="muted desktop-hint">לחיצה על מספר שורה בוחרת אותה לתרגול; Shift+לחיצה מרחיבה את הקטע.</span>
         {song.source && (
           <a href={song.source} target="_blank" rel="noreferrer">
             מקור הטאבים

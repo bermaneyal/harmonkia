@@ -157,6 +157,8 @@ button.primary {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
 .note {
   display: flex;
@@ -216,14 +218,6 @@ footer a {
   color: var(--blow);
 }
 
-@media (max-width: 600px) {
-  .tuner {
-    grid-template-columns: 1fr;
-  }
-  .tuner .big {
-    font-size: 2.2rem;
-  }
-}
 
 /* Section picker & practice controls */
 .range {
@@ -496,4 +490,142 @@ button.icon {
   border-radius: 10px;
   z-index: 20;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .app {
+    padding: 12px;
+  }
+  header h1 {
+    font-size: 1.5rem;
+  }
+  header .sub {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+  }
+  .whoami .name {
+    max-width: 90px;
+  }
+
+  .controls {
+    padding: 10px 12px;
+    gap: 10px;
+  }
+  .controls label {
+    width: 100%;
+  }
+  select {
+    width: 100%;
+    min-width: 0;
+  }
+  .range {
+    flex-wrap: wrap;
+  }
+  .range select {
+    flex: 1 1 40%;
+    min-width: 0;
+  }
+  .range span {
+    color: var(--muted);
+  }
+  .checks {
+    width: 100%;
+  }
+  .buttons {
+    width: 100%;
+  }
+  .buttons button {
+    flex: 1 1 45%;
+    padding: 10px 8px;
+  }
+
+  .statusbar {
+    font-size: 0.85rem;
+    gap: 10px;
+  }
+
+  /* tuner: two compact columns side by side */
+  .tuner {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .tuner .big {
+    font-size: 2rem;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .tuner .big small {
+    flex-basis: 100%;
+    font-size: 0.7rem;
+    text-align: right;
+  }
+  .tuner .arrow {
+    font-size: 1.4rem;
+  }
+
+  /* tabs: one row per line, scrolls sideways, current note kept in view */
+  .tab-row {
+    gap: 6px;
+  }
+  .tab-line {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  .note {
+    min-width: 46px;
+    padding: 5px 3px;
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+  }
+  .note .hole {
+    font-size: 1.3rem;
+  }
+  .note .syl {
+    font-size: 0.72rem;
+  }
+  .line-no {
+    min-width: 24px;
+    font-size: 0.75rem;
+  }
+
+  .stats {
+    gap: 8px;
+  }
+  .stat {
+    flex: 1 1 28%;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+  .stat-value {
+    font-size: 1.3rem;
+  }
+  .summary {
+    padding: 12px;
+  }
+  footer {
+    font-size: 0.85rem;
+  }
+  .toast {
+    inset-inline: 12px;
+    transform: none;
+    text-align: center;
+  }
+}
+
+/* larger touch targets on any touch device */
+@media (pointer: coarse) {
+  button {
+    min-height: 40px;
+  }
+  .note {
+    min-height: 60px;
+  }
+  .desktop-hint {
+    display: none;
+  }
 }
